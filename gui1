@@ -25,7 +25,7 @@ def login():
         connection.enable()
         messagebox.showinfo("Success", "Login successful to " + ip)
         login_frame.grid_forget()  # Hide the login frame
-        action_frame.grid(row=0, column=0, padx=10, pady=10)  # Show the action frame
+        action_frame.grid(row=1, column=0, padx=10, pady=10)  # Show the action frame
     except Exception as e:
         messagebox.showerror("Login Error", f"Failed to login: {e}")
 
@@ -141,11 +141,11 @@ connection = None  # Global connection variable
 
 # Top label for hostname
 hostname_label = tk.Label(root, text="Hostname: Not Set", font=("Arial", 12), pady=5)
-hostname_label.pack()
+hostname_label.grid(row=0, column=0)
 
 # Login section
 login_frame = tk.Frame(root, padx=20, pady=20)
-login_frame.pack(padx=10, pady=10)
+login_frame.grid(row=1, column=0, padx=10, pady=10)
 
 tk.Label(login_frame, text="Device IP Address:").grid(row=0, column=0, sticky="w")
 ip_entry = tk.Entry(login_frame)
