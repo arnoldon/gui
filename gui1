@@ -1,0 +1,142 @@
+import tkinter as tk
+from tkinter import messagebox
+from netmiko import ConnectHandler
+import re
+
+def connect_device(ip, username, password, enable_password):
+    try:
+        device = {
+            "device_type": "cisco_ios",
+            "host": ip,
+            "username": username,
+            "password": password,
+            "secret": enable_password,
+        }
+        connection = ConnectHandler(**device)
+        connection.enable()
+        return connection
+    except Exception as e:
+        messagebox.showerror("Connection Error", str(e))
+        return None
+
+def configure_acl(connection):
+    try:
+        acl_commands = [
+            "ip access-list extended ACL_TEST",
+            "permit tcp any any eq 80",
+            "permit tcp any any eq 443",
+            "deny ip any any",
+        ]
+        connection.send_config_set(acl_commands)
+        messagebox.showinfo("Success", "ACL configured successfully.")
+    except Exception as e:
+        messagebox.showerror("Error", str(e))
+
+def configure_ipsec(connection):
+    try:
+        ipsec_commands = [
+            "crypto isakmp policy 10",
+            "encryption aes",
+            "hash sha256",
+            "authentication pre-share",
+            "group 14",
+            "crypto ipsec transform-set TRANSFORM esp-aes esp-sha-hmac",
+            "access-list 100 permit ip any any",
+        ]
+        connection.send_config_set(ipsec_commands)
+        messagebox.showinfo("Success", "IPSec configured successfully.")
+    except Exception as e:
+        messagebox.showerror("Error", str(e))
+
+def compare_running_config(connection):
+    try:
+        running_config = connection.send_command("show running-config")
+        hardening_guidelines = "no cdp run\nservice password-encryption\nlogin block-for 120 attempts 3 within 60"
+        missing_configs = []
+
+        for line in hardening_guidelines.splitlines():
+            if not re.search(re.escape(line), running_config):
+                missing_configs.append(line)
+
+        if missing_configs:
+            messagebox.showinfo("Comparison Result", f"Missing Configurations:\n{'\n'.join(missing_configs)}")
+        else:
+            messagebox.showinfo("Comparison Result", "Device is fully compliant.")
+    except Exception as e:
+        messagebox.showerror("Error", str(e))
+
+def enable_syslog(connection):
+    try:
+        syslog_commands = [
+            "logging buffered 20000",
+            "logging console warnings",
+        ]
+        connection.send_config_set(syslog_commands)
+        messagebox.showinfo("Success", "Syslog configured successfully.")
+    except Exception as e:
+        messagebox.showerror("Error", str(e))
+
+def main():
+    def on_connect():
+        ip = ip_entry.get()
+        username = username_entry.get()
+        password = password_entry.get()
+        enable_password = enable_password_entry.get()
+        connection = connect_device(ip, username, password, enable_password)
+        if connection:
+            global device_connection
+            device_connection = connection
+            messagebox.showinfo("Connection", "Successfully connected to the device.")
+    
+    def on_acl():
+        if device_connection:
+            configure_acl(device_connection)
+    
+    def on_ipsec():
+        if device_connection:
+            configure_ipsec(device_connection)
+    
+    def on_compare():
+        if device_connection:
+            compare_running_config(device_connection)
+    
+    def on_syslog():
+        if device_connection:
+            enable_syslog(device_connection)
+
+    global device_connection
+    device_connection = None
+
+    # Create GUI window
+    root = tk.Tk()
+    root.title("Network Device Configuration GUI")
+    root.geometry("400x400")
+
+    # Input fields
+    tk.Label(root, text="IP Address:").pack()
+    ip_entry = tk.Entry(root)
+    ip_entry.pack()
+
+    tk.Label(root, text="Username:").pack()
+    username_entry = tk.Entry(root)
+    username_entry.pack()
+
+    tk.Label(root, text="Password:").pack()
+    password_entry = tk.Entry(root, show="*")
+    password_entry.pack()
+
+    tk.Label(root, text="Enable Password:").pack()
+    enable_password_entry = tk.Entry(root, show="*")
+    enable_password_entry.pack()
+
+    # Buttons
+    tk.Button(root, text="Connect", command=on_connect).pack(pady=10)
+    tk.Button(root, text="Configure ACL", command=on_acl).pack(pady=5)
+    tk.Button(root, text="Configure IPSec", command=on_ipsec).pack(pady=5)
+    tk.Button(root, text="Compare Config", command=on_compare).pack(pady=5)
+    tk.Button(root, text="Enable Syslog", command=on_syslog).pack(pady=5)
+
+    root.mainloop()
+
+if __name__ == "__main__":
+    main()
