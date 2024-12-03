@@ -10,9 +10,10 @@ def login():
     username = username_entry.get()
     password = password_entry.get()
     enable_password = enable_password_entry.get()
+    connection_type = connection_type_var.get()
     
     device = {
-        "device_type": "cisco_ios",
+        "device_type": "cisco_ios_telnet" if connection_type == "Telnet" else "cisco_ios",
         "host": ip,
         "username": username,
         "password": password,
@@ -23,7 +24,7 @@ def login():
     try:
         connection = ConnectHandler(**device)
         connection.enable()
-        messagebox.showinfo("Success", "Login successful to " + ip)
+        messagebox.showinfo("Success", f"Login successful to {ip} via {connection_type}")
         login_frame.grid_forget()  # Hide the login frame
         action_frame.grid(row=0, column=0, padx=10, pady=10)  # Show the action frame
     except Exception as e:
@@ -84,10 +85,26 @@ def configure_syslog():
     except Exception as e:
         messagebox.showerror("Error", f"Failed to configure syslog: {e}")
 
+# Function to change hostname
+def change_hostname():
+    if not connection:
+        messagebox.showwarning("Warning", "You must login first.")
+        return
+    new_hostname = hostname_entry.get()
+    if not new_hostname:
+        messagebox.showwarning("Warning", "Please enter a new hostname.")
+        return
+    try:
+        hostname_commands = [f"hostname {new_hostname}"]
+        connection.send_config_set(hostname_commands)
+        messagebox.showinfo("Success", f"Hostname changed to {new_hostname}")
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to change hostname: {e}")
+
 # Setting up the GUI
 root = tk.Tk()
 root.title("Network Management Tool")
-root.geometry("400x300")
+root.geometry("400x400")
 root.resizable(False, False)
 
 connection = None  # Global connection variable
@@ -112,7 +129,11 @@ tk.Label(login_frame, text="Enable Password:").grid(row=3, column=0, sticky="w")
 enable_password_entry = tk.Entry(login_frame, show="*")
 enable_password_entry.grid(row=3, column=1, pady=5)
 
-tk.Button(login_frame, text="Login", command=login).grid(row=4, column=0, columnspan=2, pady=10)
+tk.Label(login_frame, text="Connection Type:").grid(row=4, column=0, sticky="w")
+connection_type_var = tk.StringVar(value="SSH")
+tk.OptionMenu(login_frame, connection_type_var, "SSH", "Telnet").grid(row=4, column=1, pady=5)
+
+tk.Button(login_frame, text="Login", command=login).grid(row=5, column=0, columnspan=2, pady=10)
 
 # Action section (hidden until login)
 action_frame = tk.Frame(root, padx=20, pady=20)
@@ -120,5 +141,10 @@ action_frame = tk.Frame(root, padx=20, pady=20)
 tk.Button(action_frame, text="Configure ACL", width=25, command=configure_acl).grid(row=0, column=0, pady=5)
 tk.Button(action_frame, text="Configure IPSec", width=25, command=configure_ipsec).grid(row=1, column=0, pady=5)
 tk.Button(action_frame, text="Configure Syslog", width=25, command=configure_syslog).grid(row=2, column=0, pady=5)
+
+tk.Label(action_frame, text="New Hostname:").grid(row=3, column=0, pady=5)
+hostname_entry = tk.Entry(action_frame)
+hostname_entry.grid(row=4, column=0, pady=5)
+tk.Button(action_frame, text="Change Hostname", width=25, command=change_hostname).grid(row=5, column=0, pady=5)
 
 root.mainloop()
