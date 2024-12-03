@@ -1,38 +1,57 @@
 import tkinter as tk
 from tkinter import messagebox
 from netmiko import ConnectHandler
-import re
+import time
 
-def connect_device(ip, username, password, enable_password):
+# Function to handle device login
+def login():
+    global connection
+    ip = ip_entry.get()
+    username = username_entry.get()
+    password = password_entry.get()
+    enable_password = enable_password_entry.get()
+    
+    device = {
+        "device_type": "cisco_ios",
+        "host": ip,
+        "username": username,
+        "password": password,
+        "secret": enable_password,
+        "timeout": 60,
+    }
+
     try:
-        device = {
-            "device_type": "cisco_ios",
-            "host": ip,
-            "username": username,
-            "password": password,
-            "secret": enable_password,
-        }
         connection = ConnectHandler(**device)
         connection.enable()
-        return connection
+        messagebox.showinfo("Success", "Login successful to " + ip)
+        login_frame.grid_forget()
+        action_frame.grid(row=1, column=0, padx=10, pady=10)
     except Exception as e:
-        messagebox.showerror("Connection Error", str(e))
-        return None
+        messagebox.showerror("Login Error", f"Failed to login: {e}")
 
-def configure_acl(connection):
+# Function to configure ACLs
+def configure_acl():
+    if not connection:
+        messagebox.showwarning("Warning", "You must login first.")
+        return
     try:
         acl_commands = [
-            "ip access-list extended ACL_TEST",
+            "ip access-list extended TEST_ACL",
             "permit tcp any any eq 80",
             "permit tcp any any eq 443",
-            "deny ip any any",
+            "deny ip any any"
         ]
         connection.send_config_set(acl_commands)
+        time.sleep(2)
         messagebox.showinfo("Success", "ACL configured successfully.")
     except Exception as e:
-        messagebox.showerror("Error", str(e))
+        messagebox.showerror("Error", f"Failed to configure ACL: {e}")
 
-def configure_ipsec(connection):
+# Function to configure IPSec
+def configure_ipsec():
+    if not connection:
+        messagebox.showwarning("Warning", "You must login first.")
+        return
     try:
         ipsec_commands = [
             "crypto isakmp policy 10",
@@ -40,103 +59,66 @@ def configure_ipsec(connection):
             "hash sha256",
             "authentication pre-share",
             "group 14",
-            "crypto ipsec transform-set TRANSFORM esp-aes esp-sha-hmac",
-            "access-list 100 permit ip any any",
+            "crypto ipsec transform-set MYSET esp-aes esp-sha-hmac",
+            "crypto map mymap 10 ipsec-isakmp"
         ]
         connection.send_config_set(ipsec_commands)
+        time.sleep(2)
         messagebox.showinfo("Success", "IPSec configured successfully.")
     except Exception as e:
-        messagebox.showerror("Error", str(e))
+        messagebox.showerror("Error", f"Failed to configure IPSec: {e}")
 
-def compare_running_config(connection):
-    try:
-        running_config = connection.send_command("show running-config")
-        hardening_guidelines = "no cdp run\nservice password-encryption\nlogin block-for 120 attempts 3 within 60"
-        missing_configs = []
-
-        for line in hardening_guidelines.splitlines():
-            if not re.search(re.escape(line), running_config):
-                missing_configs.append(line)
-
-        if missing_configs:
-            messagebox.showinfo("Comparison Result", f"Missing Configurations:\n{'\n'.join(missing_configs)}")
-        else:
-            messagebox.showinfo("Comparison Result", "Device is fully compliant.")
-    except Exception as e:
-        messagebox.showerror("Error", str(e))
-
-def enable_syslog(connection):
+# Function to configure syslog
+def configure_syslog():
+    if not connection:
+        messagebox.showwarning("Warning", "You must login first.")
+        return
     try:
         syslog_commands = [
             "logging buffered 20000",
-            "logging console warnings",
+            "logging console warnings"
         ]
         connection.send_config_set(syslog_commands)
+        time.sleep(2)
         messagebox.showinfo("Success", "Syslog configured successfully.")
     except Exception as e:
-        messagebox.showerror("Error", str(e))
+        messagebox.showerror("Error", f"Failed to configure syslog: {e}")
 
-def main():
-    def on_connect():
-        ip = ip_entry.get()
-        username = username_entry.get()
-        password = password_entry.get()
-        enable_password = enable_password_entry.get()
-        connection = connect_device(ip, username, password, enable_password)
-        if connection:
-            global device_connection
-            device_connection = connection
-            messagebox.showinfo("Connection", "Successfully connected to the device.")
-    
-    def on_acl():
-        if device_connection:
-            configure_acl(device_connection)
-    
-    def on_ipsec():
-        if device_connection:
-            configure_ipsec(device_connection)
-    
-    def on_compare():
-        if device_connection:
-            compare_running_config(device_connection)
-    
-    def on_syslog():
-        if device_connection:
-            enable_syslog(device_connection)
+# Setting up the GUI
+root = tk.Tk()
+root.title("Network Management Tool")
+root.geometry("400x300")
+root.resizable(False, False)
 
-    global device_connection
-    device_connection = None
+connection = None  # Global connection variable
 
-    # Create GUI window
-    root = tk.Tk()
-    root.title("Network Device Configuration GUI")
-    root.geometry("400x400")
+# Login section
+login_frame = tk.Frame(root, padx=20, pady=20)
+login_frame.pack(padx=10, pady=10, fill="x")
 
-    # Input fields
-    tk.Label(root, text="IP Address:").pack()
-    ip_entry = tk.Entry(root)
-    ip_entry.pack()
+tk.Label(login_frame, text="Device IP Address:").grid(row=0, column=0, sticky="w")
+ip_entry = tk.Entry(login_frame)
+ip_entry.grid(row=0, column=1, pady=5)
 
-    tk.Label(root, text="Username:").pack()
-    username_entry = tk.Entry(root)
-    username_entry.pack()
+tk.Label(login_frame, text="Username:").grid(row=1, column=0, sticky="w")
+username_entry = tk.Entry(login_frame)
+username_entry.grid(row=1, column=1, pady=5)
 
-    tk.Label(root, text="Password:").pack()
-    password_entry = tk.Entry(root, show="*")
-    password_entry.pack()
+tk.Label(login_frame, text="Password:").grid(row=2, column=0, sticky="w")
+password_entry = tk.Entry(login_frame, show="*")
+password_entry.grid(row=2, column=1, pady=5)
 
-    tk.Label(root, text="Enable Password:").pack()
-    enable_password_entry = tk.Entry(root, show="*")
-    enable_password_entry.pack()
+tk.Label(login_frame, text="Enable Password:").grid(row=3, column=0, sticky="w")
+enable_password_entry = tk.Entry(login_frame, show="*")
+enable_password_entry.grid(row=3, column=1, pady=5)
 
-    # Buttons
-    tk.Button(root, text="Connect", command=on_connect).pack(pady=10)
-    tk.Button(root, text="Configure ACL", command=on_acl).pack(pady=5)
-    tk.Button(root, text="Configure IPSec", command=on_ipsec).pack(pady=5)
-    tk.Button(root, text="Compare Config", command=on_compare).pack(pady=5)
-    tk.Button(root, text="Enable Syslog", command=on_syslog).pack(pady=5)
+tk.Button(login_frame, text="Login", command=login).grid(row=4, column=0, columnspan=2, pady=10)
 
-    root.mainloop()
+# Action section (hidden until login)
+action_frame = tk.Frame(root, padx=20, pady=20)
 
-if __name__ == "__main__":
-    main()
+tk.Button(action_frame, text="Configure ACL", width=25, command=configure_acl).grid(row=0, column=0, pady=5)
+tk.Button(action_frame, text="Configure IPSec", width=25, command=configure_ipsec).grid(row=1, column=0, pady=5)
+tk.Button(action_frame, text="Configure Syslog", width=25, command=configure_syslog).grid(row=2, column=0, pady=5)
+
+root.mainloop()
